@@ -804,6 +804,11 @@ class SQLAlchemyMemoryStore(MemoryStore):
                 conn.commit()
                 logger.info("Migration: Added embedding column to episodes table")
 
+            if not _has_column("entities", "embedding"):
+                conn.execute(text("ALTER TABLE entities ADD COLUMN embedding BYTEA" if not _is_sqlite(self.engine) else "ALTER TABLE entities ADD COLUMN embedding BLOB"))
+                conn.commit()
+                logger.info("Migration: Added embedding column to entities table")
+
             if not _has_column("episodes", "topic_id"):
                 conn.execute(text("ALTER TABLE episodes ADD COLUMN topic_id TEXT"))
                 conn.commit()
