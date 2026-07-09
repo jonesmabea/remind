@@ -975,11 +975,19 @@ class SQLAlchemyMemoryStore(MemoryStore):
             return
 
         if self._vec_dimensions is not None and self._vec_dimensions != dims:
-            logger.warning(
-                f"Embedding dimensions changed ({self._vec_dimensions} -> {dims}), "
-                f"recreating vector tables"
+            # HARDENED (2026-07-09): do NOT auto-drop/recreate the vector index on a
+            # dimension change. The previous behavior dropped vec_concepts/vec_episodes and
+            # rebuilt+backfilled, which silently destroyed the index whenever stored embeddings
+            # were mixed-dimension (e.g. after an embedding-model change with un-migrated data).
+            # Warn and leave the index intact; the caller's vector op fails non-destructively
+            # (recall falls back to brute force). Resolve a real model change explicitly with
+            # `remind re-embed --all`, which rebuilds the index deterministically.
+            logger.error(
+                f"Embedding dimension mismatch: vector index is {self._vec_dimensions}-dim "
+                f"but received a {dims}-dim embedding. NOT rebuilding automatically (that would "
+                f"drop the index). Run `remind re-embed --all` after changing the embedding model."
             )
-            self._drop_vector_tables(conn=conn)
+            return
 
         self._vec_dimensions = dims
 
