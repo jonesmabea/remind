@@ -2736,10 +2736,17 @@ class SQLAlchemyMemoryStore(MemoryStore):
         with self._connect() as conn:
             concept_count = conn.execute(select(func.count()).select_from(concepts_table)).scalar()
             episode_count = conn.execute(select(func.count()).select_from(episodes_table)).scalar()
-            unconsolidated_count = conn.execute(
-                select(func.count()).select_from(episodes_table)
+            # Fetch+filter (not raw COUNT) so soft-deleted episodes don't inflate the
+            # pending counter forever — deleted_at lives in the JSON blob, not a column.
+            # Mirrors count_unconsolidated_episodes().
+            unconsolidated_rows = conn.execute(
+                select(episodes_table.c.data)
                 .where(episodes_table.c.consolidated == False)  # noqa: E712
-            ).scalar()
+            ).fetchall()
+            unconsolidated_count = sum(
+                1 for row in unconsolidated_rows
+                if not _parse_json(row.data).get("deleted_at")
+            )
             relation_count = conn.execute(select(func.count()).select_from(relations_table)).scalar()
 
             relation_types = conn.execute(
@@ -2779,6 +2786,8 @@ class SQLAlchemyMemoryStore(MemoryStore):
         for data in all_ep_data:
             ep_type = data.get("episode_type") or "observation"
             ep_type_counts[ep_type] = ep_type_counts.get(ep_type, 0) + 1
+            if data.get("deleted_at"):
+                continue  # soft-deleted episodes must not count as pending extraction
             extracted = data.get("entities_extracted")
             if extracted not in (True, 1, "true"):
                 unextracted_count += 1

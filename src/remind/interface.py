@@ -557,6 +557,8 @@ class MemoryInterface:
         
         if result.episodes_processed > 0:
             self._last_consolidation = datetime.now()
+            # Persist so fresh CLI processes (status/stats) can report it (was in-memory only)
+            self.store.set_metadata("last_consolidation", self._last_consolidation.isoformat())
             self._episode_buffer = []  # Clear buffer after successful consolidation
         
         return result
@@ -1419,7 +1421,11 @@ class MemoryInterface:
         stats["auto_consolidate"] = self.auto_consolidate
         stats["should_consolidate"] = self.should_consolidate
         stats["configured_episode_types"] = list(self.episode_types)
-        stats["last_consolidation"] = self._last_consolidation.isoformat() if self._last_consolidation else None
+        stats["last_consolidation"] = (
+            self._last_consolidation.isoformat()
+            if self._last_consolidation
+            else self.store.get_metadata("last_consolidation")
+        )
         stats["llm_provider"] = self.llm.name
         stats["embedding_provider"] = self.embedding.name
         

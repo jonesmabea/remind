@@ -1219,7 +1219,8 @@ If no conflicts exist, write: CONFLICTS: none"""
         concept = self.store.get_concept(concept_id)
         
         if not concept:
-            logger.warning(f"Concept {concept_id} not found for update")
+            # Stale LLM reference (concept merged/deleted since the batch was built) — routine, not actionable
+            logger.debug(f"Concept {concept_id} referenced in update no longer exists; skipping")
             return
         
         # Update title if provided
